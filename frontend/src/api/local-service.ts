@@ -1,6 +1,7 @@
 import { MODULE_BY_KEY } from '@/data/modules'
-import { allRows, listRows, resetRows, saveRows } from '@/data/local-store'
-import type { ActionResult, EntryRow, ModuleMeta, OverviewResult, PageResult } from '@/data/types'
+import { listRows, resetRows, saveRows } from '@/data/local-store'
+import { recordChange } from '@/api/situation-service'
+import type { ActionResult, EntryRow, ModuleMeta, PageResult } from '@/data/types'
 
 // 会写进数据的「往回走」动作：命中就把这条记录标成异常态，看板上能一眼看出来。
 const NEGATIVE_ACTIONS = ['撤销', '作废', '拒绝', '驳回', '停用', '忽略', '下线', '回滚']
@@ -53,6 +54,8 @@ export function runAction(key: string, id: number, action: string): ActionResult
   const next = [...rows]
   next[index] = updated
   saveRows(key, next)
+  // 每次流转都进林火变化事件流，总览上的「变化最多的三处」据此统计。
+  recordChange(key, updated, action)
   return { ok: true, message: `${meta.entity}已${action}，当前状态「${target}」` }
 }
 
@@ -82,24 +85,4 @@ export function downloadEntries(key: string): void {
   anchor.click()
   document.body.removeChild(anchor)
   URL.revokeObjectURL(url)
-}
-
-export function loadOverview(): OverviewResult {
-  const rows = allRows()
-  const modules = [...MODULE_BY_KEY.values()].map((meta) => {
-    const entries = rows[meta.key] ?? []
-    return {
-      name: meta.name,
-      created: entries.length,
-      pending: entries.filter((row) => row.pending).length,
-      abnormal: entries.filter((row) => row.abnormal).length,
-    }
-  })
-  const cards = [
-    { label: '业务模块', value: modules.length },
-    { label: '登记总量', value: modules.reduce((sum, item) => sum + item.created, 0) },
-    { label: '待处理', value: modules.reduce((sum, item) => sum + item.pending, 0) },
-    { label: '异常量', value: modules.reduce((sum, item) => sum + item.abnormal, 0) },
-  ]
-  return { cards, modules }
 }
